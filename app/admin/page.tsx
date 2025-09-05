@@ -25,18 +25,13 @@ type User = {
 
 async function getUsers(): Promise<User[]> {
   const host = headers().get('host');
-  const protocol = host?.startsWith('localhost') ? 'http' : 'https';
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
   const url = `${protocol}://${host}/api/users`;
-
-  const authToken = cookies().get('auth_token')?.value;
-  if (!authToken) {
-    return [];
-  }
 
   try {
     const res = await fetch(url, {
       headers: {
-        'Cookie': `auth_token=${authToken}`,
+        Cookie: cookies().toString(),
       },
       cache: 'no-store',
     });
