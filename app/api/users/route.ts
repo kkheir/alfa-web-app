@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
       username,
     };
 
+    revalidatePath('/admin');
     return NextResponse.json({ user: newUser }, { status: 201 });
   } catch (error) {
     console.error(error);

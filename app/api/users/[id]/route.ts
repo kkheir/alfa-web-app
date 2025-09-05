@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
@@ -75,6 +76,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       return NextResponse.json({ message: 'User not found or is an admin' }, { status: 404 });
     }
 
+    revalidatePath('/admin');
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error(error);
