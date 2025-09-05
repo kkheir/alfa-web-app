@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 
 const dbPath = process.env.NODE_ENV === 'production' ? '/tmp/database.db' : 'database.db';
 const db = new Database(dbPath);
@@ -11,6 +12,18 @@ db.exec(`
     isAdmin BOOLEAN NOT NULL DEFAULT 0
   )
 `);
+
+// Seed a default admin user if no admin exists
+try {
+  const adminCheck = db.prepare('SELECT COUNT(*) as count FROM users WHERE isAdmin = 1').get() as { count: number };
+  if (adminCheck.count === 0) {
+    const hashedPassword = bcrypt.hashSync('admin', 10);
+    db.prepare('INSERT INTO users (username, password, isAdmin) VALUES (?, ?, ?)').run('admin', hashedPassword, 1);
+    console.log('Default admin user created.');
+  }
+} catch (error) {
+  console.error('Failed to seed admin user:', error);
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS imported_data (
