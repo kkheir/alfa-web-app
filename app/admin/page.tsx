@@ -1,14 +1,12 @@
-import { AppSidebar } from '@/components/app-sidebar'
-import { ChartAreaInteractive } from '@/components/chart-area-interactive'
-import { DataTable } from '@/components/data-table'
-import { SectionCards } from '@/components/section-cards'
-import { SiteHeader } from '@/components/site-header'
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { verifyToken } from '@/lib/auth'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
-import data from './data.json'
+import { SiteHeader } from '@/components/site-header'
+import AdminTabs from './AdminTabs'
+import DataTab from './DataTab'
+import DistributionTab from './DistributionTab'
+import UsersTab from './UsersTab'
 
 // This is a server-side check.
 // The middleware should have already caught unauthenticated users,
@@ -126,50 +124,46 @@ export default async function AdminPage() {
   ]
 
   return (
-    // <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-8">
-    //   <div className="container mx-auto px-4">
-    //     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-7xl mx-auto overflow-hidden">
-    //       {/* Header */}
-    //       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6">
-    //         <div className="flex justify-between items-center">
-    //           <div>
-    //             <h1 className="text-3xl font-bold text-white mb-1">Admin Panel</h1>
-    //             <p className="text-blue-100">Manage users, data, and distributions</p>
-    //           </div>
-    //           <div className="flex items-center space-x-4">
-    //             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/20">
-    //               <p className="text-white font-medium">Welcome, {user.username}!</p>
-    //             </div>
-    //             <LogoutButton />
-    //           </div>
-    //         </div>
-    //       </div>
-
-    //       {/* Tabbed Content */}
-    //       <AdminTabs tabs={tabs} defaultTab="users">
-    //         <UsersTab initialUsers={users} />
-    //         <DataTab />
-    //         <DistributionTab />
-    //       </AdminTabs>
-    //     </div>
-    //   </div>
-    // </div>
-    <SidebarProvider>
-      <AppSidebar variant='inset' />
-      <SidebarInset>
-        <SiteHeader />
-        <div className='flex flex-1 flex-col'>
-          <div className='@container/main flex flex-1 flex-col gap-2'>
-            <div className='flex flex-col gap-4 py-4 md:gap-6 md:py-6'>
-              <SectionCards />
-              <div className='px-4 lg:px-6'>
-                <ChartAreaInteractive />
+    <>
+      <SiteHeader />
+      <div className='p-6 space-y-6'>
+        {/* Header */}
+        {/* <div className='p-6'>
+          <div className='flex justify-between items-center'>
+            <div>
+              <h1 className='text-3xl font-bold mb-1'>Admin Panel</h1>
+              <p className=''>Manage users, data, and distributions</p>
+            </div>
+            <div className='flex items-center space-x-4'>
+              <div className='backdrop-blur-sm rounded-lg px-4 py-2'>
+                <p className='font-medium'>Welcome, {user.username}!</p>
               </div>
-              <DataTable data={data} />
+              <LogoutButton />
             </div>
           </div>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </div> */}
+
+        {/* Tabbed Content */}
+        <AdminTabs tabs={tabs} defaultTab='users'>
+          <UsersTab initialUsers={users} />
+          <DataTab />
+          <DistributionTab />
+        </AdminTabs>
+      </div>
+    </>
+    // <>
+    //   <SiteHeader />
+    //   <div className='flex flex-1 flex-col'>
+    //     <div className='@container/main flex flex-1 flex-col gap-2'>
+    //       <div className='flex flex-col gap-4 py-4 md:gap-6 md:py-6'>
+    //         <SectionCards />
+    //         <div className='px-4 lg:px-6'>
+    //           <ChartAreaInteractive />
+    //         </div>
+    //         <DataTable data={data} />
+    //       </div>
+    //     </div>
+    //   </div>
+    // </>
   )
 }
