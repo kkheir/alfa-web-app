@@ -10,7 +10,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 type User = {
   id: number
@@ -31,6 +34,11 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
   // State for editing password
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,29 +96,44 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingUser) return
     setError('')
     setMessage('')
-
+    if (!editingUser) {
+      setError('No user selected for password update.')
+      return
+    }
+    if (!newPassword || !confirmPassword) {
+      setError('Please enter and confirm the new password.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+    setIsUpdating(true)
     try {
       const res = await fetch(`/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword }),
       })
-
       if (res.ok) {
-        setEditingUser(null)
         setNewPassword('')
+        setConfirmPassword('')
         setMessage(
           `Password for "${editingUser.username}" updated successfully.`,
         )
+        toast(`Password for "${editingUser.username}" updated successfully.`)
+        setEditingUser(null)
+        setIsEditDialogOpen(false)
       } else {
         const data = await res.json()
         setError(data.message || 'Failed to update password.')
       }
     } catch (err) {
       setError('An unexpected error occurred.')
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -160,6 +183,7 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
                 onChange={(e) => setUsername(e.target.value)}
                 className='w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
                 placeholder='Enter username'
+                autoComplete='off'
               />
             </div>
             <div>
@@ -176,6 +200,7 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 className='w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
                 placeholder='Enter password'
+                autoComplete='off'
               />
             </div>
             <button
@@ -231,12 +256,103 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
                 </span>
               </div>
               <div className='flex space-x-3'>
-                <button
-                  onClick={() => setEditingUser(user)}
-                  className='px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg hover:from-yellow-600 hover:to-orange-600 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200'
+                <Dialog
+                  open={isEditDialogOpen}
+                  onOpenChange={setIsEditDialogOpen}
                 >
-                  Edit Password
-                </button>
+                  <DialogTrigger asChild>
+                    <Button
+                      className='px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg hover:from-yellow-600 hover:to-orange-600 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200'
+                      onClick={() => {
+                        setEditingUser(user)
+                        setNewPassword('')
+                        setConfirmPassword('')
+                        setIsEditDialogOpen(true)
+                      }}
+                    >
+                      Edit Password
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <div className='flex flex-col gap-5'>
+                      <div className='flex flex-col gap-2'>
+                        <h1 className='font-semibold text-xl'>Edit User</h1>
+                        <div className='text-sm'>
+                          Editing password for{' '}
+                          <span className='font-bold capitalize'>
+                            {user.username}
+                          </span>
+                        </div>
+                      </div>
+                      <div className='flex flex-col gap-3'>
+                        <div className='relative'>
+                          <Input
+                            type={showNewPassword ? 'text' : 'password'}
+                            placeholder='New Password'
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className='pr-10'
+                            autoComplete='off'
+                          />
+                          <span
+                            className='absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer'
+                            onClick={() => setShowNewPassword((prev) => !prev)}
+                          >
+                            {showNewPassword ? (
+                              <EyeOff size={20} className='text-gray-500' />
+                            ) : (
+                              <Eye size={20} className='text-gray-500' />
+                            )}
+                          </span>
+                        </div>
+                        <div className='relative'>
+                          <Input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            placeholder='Confirm New Password'
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className='pr-10'
+                            autoComplete='off'
+                          />
+                          <span
+                            className='absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer'
+                            onClick={() =>
+                              setShowConfirmPassword((prev) => !prev)
+                            }
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff size={20} className='text-gray-500' />
+                            ) : (
+                              <Eye size={20} className='text-gray-500' />
+                            )}
+                          </span>
+                        </div>
+                        <div className='flex items-center justify-end gap-5 pt-4'>
+                          <DialogClose asChild>
+                            <Button variant={'outline'}>Cancel</Button>
+                          </DialogClose>
+                          <Button
+                            onClick={handleUpdatePassword}
+                            disabled={
+                              !newPassword ||
+                              !confirmPassword ||
+                              newPassword !== confirmPassword ||
+                              isUpdating
+                            }
+                          >
+                            {isUpdating ? (
+                              <Loader2
+                                className='animate-spin mr-2'
+                                size={18}
+                              />
+                            ) : null}
+                            Update Password
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
                 <Dialog>
                   <DialogTrigger asChild>
                     <button className='px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 rounded-lg hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-opacity-50 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200'>
@@ -294,7 +410,7 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
       </div>
 
       {/* Edit Password Modal */}
-      {editingUser && (
+      {/* {editingUser && (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4'>
           <div className='p-8 bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100'>
             <div className='mb-6'>
@@ -348,7 +464,7 @@ export default function UserManagement({ initialUsers }: UserManagementProps) {
             </form>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   )
 }
