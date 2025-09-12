@@ -1,470 +1,549 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Search, UserPlus, Edit3, Trash2, Shield, User, Filter, SortAsc, SortDesc, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-type User = {
+interface UserData {
   id: number
   username: string
+  isAdmin: boolean
 }
 
-type UserManagementProps = {
-  initialUsers: User[]
+interface UserManagementProps {
+  initialUsers: UserData[]
 }
 
 export default function UserManagement({ initialUsers }: UserManagementProps) {
-  const [users, setUsers] = useState<User[]>(initialUsers)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const [users, setUsers] = useState<UserData[]>(initialUsers)
+  const [filteredUsers, setFilteredUsers] = useState<UserData[]>(initialUsers)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all')
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof UserData
+    direction: 'asc' | 'desc'
+  } | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
+  const [newUser, setNewUser] = useState({
+    username: '',
+    password: '',
+    isAdmin: false
+  })
+  const [isLoading, setIsLoading] = useState(false)
 
-  // State for editing password
-  const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  // Filter and sort users
+  useEffect(() => {
+    try {
+      let filtered = users.filter(user => {
+        // Safety check to ensure user has required properties
+        if (!user || typeof user.username !== 'string') {
+          console.warn('Invalid user object in filter:', user)
+          return false
+        }
+        
+        const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesRole = roleFilter === 'all' || 
+          (roleFilter === 'admin' && user.isAdmin) || 
+          (roleFilter === 'user' && !user.isAdmin)
+        return matchesSearch && matchesRole
+      })
 
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setMessage('')
+      if (sortConfig) {
+        filtered.sort((a, b) => {
+          if (sortConfig.key === 'username') {
+            return sortConfig.direction === 'asc' 
+              ? a.username.localeCompare(b.username)
+              : b.username.localeCompare(a.username)
+          }
+          if (sortConfig.key === 'isAdmin') {
+            return sortConfig.direction === 'asc'
+              ? (a.isAdmin === b.isAdmin ? 0 : a.isAdmin ? 1 : -1)
+              : (a.isAdmin === b.isAdmin ? 0 : b.isAdmin ? 1 : -1)
+          }
+          return 0
+        })
+      }
 
-    if (!username || !password) {
-      setError('Username and password are required.')
+      setFilteredUsers(filtered)
+    } catch (error) {
+      console.error('Error filtering users:', error)
+      setFilteredUsers([])
+    }
+  }, [users, searchTerm, roleFilter, sortConfig])
+
+  const handleSort = (key: keyof UserData) => {
+    setSortConfig(current => ({
+      key,
+      direction: current?.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const handleAddUser = async () => {
+    if (!newUser.username || !newUser.password) {
+      toast.error('Please fill in all fields')
       return
     }
 
+    setIsLoading(true)
     try {
-      const res = await fetch('/api/users', {
+      const response = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newUser),
       })
 
-      const data = await res.json()
-
-      if (res.ok) {
-        setUsers([...users, data.user])
-        setUsername('')
-        setPassword('')
-        setMessage(`User "${data.user.username}" created successfully.`)
+      if (response.ok) {
+        const user = await response.json()
+        console.log('New user created:', user) // Debug log
+        
+        // Ensure the user object has required properties
+        if (user && user.username && typeof user.id !== 'undefined') {
+          setUsers(prev => [...prev, user])
+          setNewUser({ username: '', password: '', isAdmin: false })
+          setShowAddModal(false)
+          toast.success('User created successfully')
+        } else {
+          console.error('Invalid user object received:', user)
+          toast.error('Invalid response from server')
+        }
       } else {
-        setError(data.message || 'Failed to create user.')
+        const error = await response.text()
+        toast.error(error || 'Failed to create user')
       }
-    } catch (err) {
-      setError('An unexpected error occurred.')
+    } catch (error) {
+      console.error('Error creating user:', error)
+      toast.error('Failed to create user')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleDeleteUser = async (userId: number) => {
-    setError('')
-    setMessage('')
-    // if (!confirm('Are you sure you want to delete this user?')) return
+  const handleEditUser = async () => {
+    if (!selectedUser) return
 
+    setIsLoading(true)
     try {
-      const res = await fetch(`/api/users/${userId}`, {
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: selectedUser.username,
+          isAdmin: selectedUser.isAdmin
+        }),
+      })
+
+      if (response.ok) {
+        const updatedUser = await response.json()
+        setUsers(prev => prev.map(user => 
+          user.id === selectedUser.id ? updatedUser : user
+        ))
+        setShowEditModal(false)
+        setSelectedUser(null)
+        toast.success('User updated successfully')
+      } else {
+        const error = await response.text()
+        toast.error(error || 'Failed to update user')
+      }
+    } catch (error) {
+      toast.error('Failed to update user')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return
+
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: 'DELETE',
       })
 
-      if (res.ok) {
-        setUsers(users.filter((user) => user.id !== userId))
-        setMessage('User deleted successfully.')
+      if (response.ok) {
+        setUsers(prev => prev.filter(user => user.id !== selectedUser.id))
+        setShowDeleteModal(false)
+        setSelectedUser(null)
+        toast.success('User deleted successfully')
       } else {
-        const data = await res.json()
-        setError(data.message || 'Failed to delete user.')
+        const error = await response.text()
+        toast.error(error || 'Failed to delete user')
       }
-    } catch (err) {
-      setError('An unexpected error occurred.')
+    } catch (error) {
+      toast.error('Failed to delete user')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleUpdatePassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setMessage('')
-    if (!editingUser) {
-      setError('No user selected for password update.')
-      return
-    }
-    if (!newPassword || !confirmPassword) {
-      setError('Please enter and confirm the new password.')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.')
-      return
-    }
-    setIsUpdating(true)
-    try {
-      const res = await fetch(`/api/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newPassword }),
-      })
-      if (res.ok) {
-        setNewPassword('')
-        setConfirmPassword('')
-        setMessage(
-          `Password for "${editingUser.username}" updated successfully.`,
-        )
-        toast(`Password for "${editingUser.username}" updated successfully.`)
-        setEditingUser(null)
-        setIsEditDialogOpen(false)
-      } else {
-        const data = await res.json()
-        setError(data.message || 'Failed to update password.')
-      }
-    } catch (err) {
-      setError('An unexpected error occurred.')
-    } finally {
-      setIsUpdating(false)
-    }
+  const getRoleBadge = (isAdmin: boolean) => {
+    return isAdmin ? (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        <Shield className="w-3 h-3 mr-1" />
+        Admin
+      </span>
+    ) : (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        <User className="w-3 h-3 mr-1" />
+        User
+      </span>
+    )
+  }
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setRoleFilter('all')
+    setSortConfig(null)
   }
 
   return (
-    <div>
-      {/* Add User Form */}
-      <div className='mb-10 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100'>
-        <h2 className='text-2xl font-bold mb-6 text-gray-800 flex items-center'>
-          <svg
-            className='w-6 h-6 mr-2 text-blue-600'
-            fill='none'
-            stroke='currentColor'
-            viewBox='0 0 24 24'
-          >
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth={2}
-              d='M12 6v6m0 0v6m0-6h6m-6 0H6'
+    <div className="space-y-6">
+      {/* Search and Filter Controls */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </svg>
-          Add New User
-        </h2>
-        <form onSubmit={handleAddUser}>
-          {error && (
-            <div className='mb-4 p-3 bg-red-50 border-l-4 border-red-400 text-red-700 rounded'>
-              <p className='text-sm'>{error}</p>
-            </div>
-          )}
-          {message && (
-            <div className='mb-4 p-3 bg-green-50 border-l-4 border-green-400 text-green-700 rounded'>
-              <p className='text-sm'>{message}</p>
-            </div>
-          )}
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-4 items-end'>
-            <div>
-              <label
-                className='block mb-2 text-sm font-semibold text-gray-700'
-                htmlFor='username'
-              >
-                Username
-              </label>
-              <input
-                id='username'
-                type='text'
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className='w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
-                placeholder='Enter username'
-                autoComplete='off'
-              />
-            </div>
-            <div>
-              <label
-                className='block mb-2 text-sm font-semibold text-gray-700'
-                htmlFor='password'
-              >
-                Password
-              </label>
-              <input
-                id='password'
-                type='password'
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className='w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
-                placeholder='Enter password'
-                autoComplete='off'
-              />
-            </div>
-            <button
-              type='submit'
-              className='px-6 py-3 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200'
-            >
-              Add User
-            </button>
           </div>
-        </form>
-      </div>
 
-      {/* User List */}
-      <div>
-        <h2 className='text-2xl font-bold mb-6 text-gray-800 flex items-center'>
-          <svg
-            className='w-6 h-6 mr-2 text-indigo-600'
-            fill='none'
-            stroke='currentColor'
-            viewBox='0 0 24 24'
-          >
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth={2}
-              d='M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z'
-            />
-          </svg>
-          Manage Users
-        </h2>
-        <div className='space-y-4'>
-          {users.map((user) => (
-            <div
-              key={user.id}
-              className='flex items-center justify-between p-5 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200'
+          {/* Role Filter */}
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value as 'all' | 'admin' | 'user')}
+              className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
             >
-              <div className='flex items-center'>
-                <div className='w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mr-4'>
-                  <svg
-                    className='w-5 h-5 text-white'
-                    fill='currentColor'
-                    viewBox='0 0 20 20'
-                  >
-                    <path
-                      fillRule='evenodd'
-                      d='M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z'
-                      clipRule='evenodd'
-                    />
-                  </svg>
-                </div>
-                <span className='font-semibold text-gray-800 text-lg'>
-                  {user.username}
-                </span>
-              </div>
-              <div className='flex space-x-3'>
-                <Dialog
-                  open={isEditDialogOpen}
-                  onOpenChange={setIsEditDialogOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button
-                      className='px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg hover:from-yellow-600 hover:to-orange-600 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200'
-                      onClick={() => {
-                        setEditingUser(user)
-                        setNewPassword('')
-                        setConfirmPassword('')
-                        setIsEditDialogOpen(true)
-                      }}
-                    >
-                      Edit Password
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <div className='flex flex-col gap-5'>
-                      <div className='flex flex-col gap-2'>
-                        <h1 className='font-semibold text-xl'>Edit User</h1>
-                        <div className='text-sm'>
-                          Editing password for{' '}
-                          <span className='font-bold capitalize'>
-                            {user.username}
-                          </span>
-                        </div>
-                      </div>
-                      <div className='flex flex-col gap-3'>
-                        <div className='relative'>
-                          <Input
-                            type={showNewPassword ? 'text' : 'password'}
-                            placeholder='New Password'
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className='pr-10'
-                            autoComplete='off'
-                          />
-                          <span
-                            className='absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer'
-                            onClick={() => setShowNewPassword((prev) => !prev)}
-                          >
-                            {showNewPassword ? (
-                              <EyeOff size={20} className='text-gray-500' />
-                            ) : (
-                              <Eye size={20} className='text-gray-500' />
-                            )}
-                          </span>
-                        </div>
-                        <div className='relative'>
-                          <Input
-                            type={showConfirmPassword ? 'text' : 'password'}
-                            placeholder='Confirm New Password'
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            className='pr-10'
-                            autoComplete='off'
-                          />
-                          <span
-                            className='absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer'
-                            onClick={() =>
-                              setShowConfirmPassword((prev) => !prev)
-                            }
-                          >
-                            {showConfirmPassword ? (
-                              <EyeOff size={20} className='text-gray-500' />
-                            ) : (
-                              <Eye size={20} className='text-gray-500' />
-                            )}
-                          </span>
-                        </div>
-                        <div className='flex items-center justify-end gap-5 pt-4'>
-                          <DialogClose asChild>
-                            <Button variant={'outline'}>Cancel</Button>
-                          </DialogClose>
-                          <Button
-                            onClick={handleUpdatePassword}
-                            disabled={
-                              !newPassword ||
-                              !confirmPassword ||
-                              newPassword !== confirmPassword ||
-                              isUpdating
-                            }
-                          >
-                            {isUpdating ? (
-                              <Loader2
-                                className='animate-spin mr-2'
-                                size={18}
-                              />
-                            ) : null}
-                            Update Password
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <button className='px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 rounded-lg hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-opacity-50 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200'>
-                      Delete
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>
-                        Are you sure you want to delete this user ?
-                      </DialogTitle>
-                      <DialogDescription>
-                        This will permanently delete your user account.
-                      </DialogDescription>
+              <option value="all">All Roles</option>
+              <option value="admin">Admins</option>
+              <option value="user">Users</option>
+            </select>
+          </div>
 
-                      <div className='w-full flex items-center justify-end gap-5 pt-8'>
-                        <DialogClose asChild>
-                          <Button variant={'outline'}>Cancel</Button>
-                        </DialogClose>
-                        <Button
-                          variant={'destructive'}
-                          onClick={() => handleDeleteUser(user.id)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </DialogHeader>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-          ))}
-          {users.length === 0 && (
-            <div className='text-center py-12'>
-              <svg
-                className='w-16 h-16 mx-auto text-gray-400 mb-4'
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={1}
-                  d='M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'
-                />
-              </svg>
-              <p className='text-gray-500 text-lg'>No users found</p>
-              <p className='text-gray-400 text-sm'>
-                Add your first user using the form above
-              </p>
-            </div>
+          {/* Clear Filters */}
+          {(searchTerm || roleFilter !== 'all' || sortConfig) && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Clear
+            </button>
+          )}
+
+          {/* Add User Button */}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add User
+          </button>
+        </div>
+
+        {/* Filter Summary */}
+        <div className="mt-3 flex items-center text-sm text-gray-600">
+          <span>
+            Showing {filteredUsers.length} of {users.length} users
+          </span>
+          {searchTerm && (
+            <span className="ml-2">
+              • Filtered by "{searchTerm}"
+            </span>
+          )}
+          {roleFilter !== 'all' && (
+            <span className="ml-2">
+              • Role: {roleFilter}
+            </span>
           )}
         </div>
       </div>
 
-      {/* Edit Password Modal */}
-      {/* {editingUser && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4'>
-          <div className='p-8 bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100'>
-            <div className='mb-6'>
-              <h2 className='text-2xl font-bold text-gray-800 mb-2'>
-                Edit Password
-              </h2>
-              <p className='text-gray-600'>
-                Update password for{' '}
-                <span className='font-semibold text-blue-600'>
-                  {editingUser.username}
-                </span>
-              </p>
+      {/* Users Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <button
+                    onClick={() => handleSort('id')}
+                    className="flex items-center hover:text-gray-700"
+                  >
+                    ID
+                    {sortConfig?.key === 'id' && (
+                      sortConfig.direction === 'asc' ? (
+                        <SortAsc className="ml-1 w-3 h-3" />
+                      ) : (
+                        <SortDesc className="ml-1 w-3 h-3" />
+                      )
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <button
+                    onClick={() => handleSort('username')}
+                    className="flex items-center hover:text-gray-700"
+                  >
+                    Username
+                    {sortConfig?.key === 'username' && (
+                      sortConfig.direction === 'asc' ? (
+                        <SortAsc className="ml-1 w-3 h-3" />
+                      ) : (
+                        <SortDesc className="ml-1 w-3 h-3" />
+                      )
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <button
+                    onClick={() => handleSort('isAdmin')}
+                    className="flex items-center hover:text-gray-700"
+                  >
+                    Role
+                    {sortConfig?.key === 'isAdmin' && (
+                      sortConfig.direction === 'asc' ? (
+                        <SortAsc className="ml-1 w-3 h-3" />
+                      ) : (
+                        <SortDesc className="ml-1 w-3 h-3" />
+                      )
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                    <User className="mx-auto w-12 h-12 text-gray-300 mb-4" />
+                    <p className="text-lg font-medium">No users found</p>
+                    <p className="text-sm">Try adjusting your search or filters</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      #{user.id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                            <User className="h-5 w-5 text-gray-600" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {user.username}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getRoleBadge(user.isAdmin)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedUser(user)
+                            setShowEditModal(true)
+                          }}
+                          className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                          title="Edit user"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedUser(user)
+                            setShowDeleteModal(true)
+                          }}
+                          className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                          title="Delete user"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Add New User</h3>
+              <form onSubmit={(e) => { e.preventDefault(); handleAddUser(); }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      value={newUser.username}
+                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isAdmin"
+                      checked={newUser.isAdmin}
+                      onChange={(e) => setNewUser({ ...newUser, isAdmin: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="isAdmin" className="ml-2 block text-sm text-gray-900">
+                      Admin privileges
+                    </label>
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isLoading ? 'Creating...' : 'Create User'}
+                  </button>
+                </div>
+              </form>
             </div>
-            <form onSubmit={handleUpdatePassword}>
-              <div className='mb-6'>
-                <label
-                  className='block mb-2 text-sm font-semibold text-gray-700'
-                  htmlFor='newPassword'
-                >
-                  New Password
-                </label>
-                <input
-                  id='newPassword'
-                  type='password'
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className='w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
-                  placeholder='Enter new password'
-                  required
-                  autoFocus
-                />
-              </div>
-              <div className='flex justify-end space-x-4'>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Edit User</h3>
+              <form onSubmit={(e) => { e.preventDefault(); handleEditUser(); }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedUser.username}
+                      onChange={(e) => setSelectedUser({ ...selectedUser, username: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="editIsAdmin"
+                      checked={selectedUser.isAdmin}
+                      onChange={(e) => setSelectedUser({ ...selectedUser, isAdmin: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="editIsAdmin" className="ml-2 block text-sm text-gray-900">
+                      Admin privileges
+                    </label>
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isLoading ? 'Updating...' : 'Update User'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Modal */}
+      {showDeleteModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Delete User</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete <strong>{selectedUser.username}</strong>? 
+                This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-3">
                 <button
-                  type='button'
-                  onClick={() => {
-                    setEditingUser(null)
-                    setNewPassword('')
-                  }}
-                  className='px-6 py-3 font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-opacity-50 transition-all duration-200'
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                 >
                   Cancel
                 </button>
                 <button
-                  type='submit'
-                  className='px-6 py-3 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200'
+                  onClick={handleDeleteUser}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
                 >
-                  Update Password
+                  {isLoading ? 'Deleting...' : 'Delete User'}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
-      )} */}
+      )}
     </div>
   )
 }

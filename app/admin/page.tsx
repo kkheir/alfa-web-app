@@ -126,44 +126,22 @@ export default async function AdminPage() {
   return (
     <>
       <SiteHeader />
-      <div className='p-6 space-y-6'>
-        {/* Header */}
-        {/* <div className='p-6'>
-          <div className='flex justify-between items-center'>
-            <div>
-              <h1 className='text-3xl font-bold mb-1'>Admin Panel</h1>
-              <p className=''>Manage users, data, and distributions</p>
-            </div>
-            <div className='flex items-center space-x-4'>
-              <div className='backdrop-blur-sm rounded-lg px-4 py-2'>
-                <p className='font-medium'>Welcome, {user.username}!</p>
-              </div>
-              <LogoutButton />
-            </div>
+      <div className='min-h-screen bg-gray-50'>
+        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
+          {/* Page Header */}
+          <div className='mb-8'>
+            <h1 className='text-3xl font-bold text-gray-900 mb-2'>Admin Dashboard</h1>
+            <p className='text-gray-600'>Manage users, data, and system configurations</p>
           </div>
-        </div> */}
 
-        {/* Tabbed Content */}
-        <AdminTabs tabs={tabs} defaultTab='users'>
-          <UsersTab initialUsers={users} />
-          <DataTab />
-          <DistributionTab />
-        </AdminTabs>
+          {/* Tabbed Content */}
+          <AdminTabs tabs={tabs} defaultTab='users'>
+            <UsersTab initialUsers={users} />
+            <DataTab />
+            <DistributionTab />
+          </AdminTabs>
+        </div>
       </div>
     </>
-    // <>
-    //   <SiteHeader />
-    //   <div className='flex flex-1 flex-col'>
-    //     <div className='@container/main flex flex-1 flex-col gap-2'>
-    //       <div className='flex flex-col gap-4 py-4 md:gap-6 md:py-6'>
-    //         <SectionCards />
-    //         <div className='px-4 lg:px-6'>
-    //           <ChartAreaInteractive />
-    //         </div>
-    //         <DataTable data={data} />
-    //       </div>
-    //     </div>
-    //   </div>
-    // </>
   )
 }
