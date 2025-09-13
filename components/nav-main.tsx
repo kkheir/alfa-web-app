@@ -9,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
+import { useGeneralStore } from '@/stores/general-store'
 
 export function NavMain({
   items,
@@ -17,8 +18,10 @@ export function NavMain({
     title: string
     url: string
     icon?: LucideIcon
+    tab: string
   }[]
 }) {
+  const { actions } = useGeneralStore((state) => state)
   return (
     <SidebarGroup>
       <SidebarGroupContent className='flex flex-col gap-2'>
@@ -43,7 +46,10 @@ export function NavMain({
         </SidebarMenu>
         <SidebarMenu>
           {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
+            <SidebarMenuItem
+              key={item.title}
+              onClick={() => actions.setUserTab(item.tab)}
+            >
               <SidebarMenuButton tooltip={item.title}>
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>

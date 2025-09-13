@@ -1,8 +1,7 @@
-import { verifyToken } from '@/lib/auth'
-import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { SiteHeader } from '@/components/site-header'
+import { getAuth, getUsers } from '../layout'
 import AdminTabs from './AdminTabs'
 import DataTab from './DataTab'
 import DistributionTab from './DistributionTab'
@@ -11,47 +10,6 @@ import UsersTab from './UsersTab'
 // This is a server-side check.
 // The middleware should have already caught unauthenticated users,
 // but this is an extra layer of protection.
-async function getAuth() {
-  const token = cookies().get('auth_token')?.value
-  if (!token) return null
-
-  const decoded = await verifyToken(token)
-  return decoded as {
-    userId: number
-    username: string
-    isAdmin: boolean
-  } | null
-}
-
-type User = {
-  id: number
-  username: string
-}
-
-async function getUsers(): Promise<User[]> {
-  const host = headers().get('host')
-  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-  const url = `${protocol}://${host}/api/users`
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        Cookie: cookies().toString(),
-      },
-      cache: 'no-store',
-    })
-
-    if (!res.ok) {
-      console.error(`Failed to fetch users: ${res.status} ${res.statusText}`)
-      return []
-    }
-
-    return res.json()
-  } catch (error) {
-    console.error('An error occurred while fetching users:', error)
-    return []
-  }
-}
 
 export default async function AdminPage() {
   const user = await getAuth()
@@ -126,12 +84,16 @@ export default async function AdminPage() {
   return (
     <>
       <SiteHeader />
-      <div className='min-h-screen bg-gray-50'>
+      <div className='h-full bg-background'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
           {/* Page Header */}
           <div className='mb-8'>
-            <h1 className='text-3xl font-bold text-gray-900 mb-2'>Admin Dashboard</h1>
-            <p className='text-gray-600'>Manage users, data, and system configurations</p>
+            <h1 className='text-3xl font-bold text-foreground mb-2'>
+              Admin Dashboard
+            </h1>
+            <p className='text-muted-foreground'>
+              Manage users, data, and system configurations
+            </p>
           </div>
 
           {/* Tabbed Content */}

@@ -5,6 +5,7 @@ import {
   CreditCardIcon,
   LogOutIcon,
   MoreVerticalIcon,
+  User,
   UserCircleIcon,
 } from 'lucide-react'
 
@@ -24,17 +25,36 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { useGeneralStore } from '@/stores/general-store'
+import { useRouter } from 'next/navigation'
 
 export function NavUser({
   user,
 }: {
   user: {
     name: string
-    email: string
-    avatar: string
+    email?: string
+    avatar?: string
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const { actions } = useGeneralStore((state) => state)
+  const { setUserTab, setUserType } = actions
+
+  const handleLogout = async () => {
+    const res = await fetch('/api/logout', {
+      method: 'POST',
+    })
+
+    if (res.ok) {
+      setUserTab('')
+      setUserType(undefined)
+      router.push('/login')
+    } else {
+      alert('Logout failed')
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -47,13 +67,17 @@ export function NavUser({
             >
               <Avatar className='h-8 w-8 rounded-lg grayscale'>
                 {/* <AvatarImage src={user.avatar} alt={user.name} /> */}
-                <AvatarFallback className='rounded-lg'>CN</AvatarFallback>
+                <AvatarFallback className='rounded-lg'>
+                  <User className='size-5 text-white' />
+                </AvatarFallback>
               </Avatar>
               <div className='grid flex-1 text-left text-sm leading-tight'>
                 <span className='truncate font-medium'>{user.name}</span>
-                <span className='truncate text-xs text-muted-foreground'>
-                  {user.email}
-                </span>
+                {user.email && (
+                  <span className='truncate text-xs text-muted-foreground'>
+                    {user.email}
+                  </span>
+                )}
               </div>
               <MoreVerticalIcon className='ml-auto size-4' />
             </SidebarMenuButton>
@@ -94,7 +118,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOutIcon />
               Log out
             </DropdownMenuItem>

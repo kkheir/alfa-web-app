@@ -1,6 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Edit, Trash2, Loader2, Share, Calendar, Users } from 'lucide-react';
 
 type Distribution = {
   id: number;
@@ -119,22 +128,24 @@ export default function PanelDistribution() {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'sent': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'draft': return <Badge variant="secondary">Draft</Badge>;
+      case 'scheduled': return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">Scheduled</Badge>;
+      case 'sent': return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">Sent</Badge>;
+      case 'cancelled': return <Badge variant="destructive">Cancelled</Badge>;
+      default: return <Badge variant="secondary">Draft</Badge>;
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-        <span className="ml-2 text-gray-600">Loading distributions...</span>
-      </div>
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin h-8 w-8 text-primary mr-2" />
+          <span className="text-muted-foreground">Loading distributions...</span>
+        </CardContent>
+      </Card>
     );
   }
 
